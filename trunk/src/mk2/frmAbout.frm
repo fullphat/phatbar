@@ -1,5 +1,6 @@
 VERSION 5.00
 Begin VB.Form frmAbout 
+   BackColor       =   &H00E9E2DA&
    BorderStyle     =   1  'Fixed Single
    Caption         =   "phatBar"
    ClientHeight    =   3090

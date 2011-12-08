@@ -14,6 +14,7 @@ Attribute VB_Exposed = False
 Option Explicit
 
 Private Const WM_SYSKEYDOWN = &H104
+Private Declare Function GetCapture Lib "user32" () As Long
 
 Const CLASS_NAME = "w>phatBarMk2"
 
@@ -32,6 +33,7 @@ Dim mWidth As Long
 
 Dim mDoingSysMenu As Boolean
 Dim mMenuOpen As Boolean
+Dim mListOpen As Boolean
 
 Dim mConfig As CConfFile3
 Dim mShowingError As Boolean        ' // next keypress clears content
@@ -43,7 +45,8 @@ Dim mShading As Boolean
 Dim mAutoHide As Boolean
 
     ' /* lists */
-Dim mHistory As BTagList
+'Dim mHistory As BTagList
+Dim mHistory2 As CConfSection
 Dim mHistoryIndex As Long
 Dim mExtensions As BTagList
 Dim mAddons As BTagList
@@ -56,7 +59,7 @@ Dim mToolButtonActive As Boolean
 
 Dim mAction As String
 
-Dim WithEvents theItemList As frmItems
+Dim WithEvents theItemList As TListWindow
 Attribute theItemList.VB_VarHelpID = -1
 
 Implements IDropTarget
@@ -100,13 +103,14 @@ Private Sub Class_Initialize()
     mhFont = g_CreateFont("Tahoma", 8)
     SendMessage mhWndText, WM_SETFONT, mhFont, ByVal 0&
 
-    Set theItemList = New frmItems
+    Set theItemList = New TListWindow
+    theItemList.Create mhWnd
 
     Set mTooltip = New CToolTip
     mTooltip.Create TTS_ALWAYSTIP, mhWnd
 '    mTooltip.Add "tip", TTF_TRACK Or TTF_TRANSPARENT
 
-    Set mHistory = new_BTagList()
+'    Set mHistory = new_BTagList()
 '    Set mExtensions = new_BTagList()
 
     Set mToolRect = new_BRect(0, 0, ICON_SIZE - 1, ICON_SIZE - 1)
@@ -142,12 +146,15 @@ Private Sub Class_Initialize()
 
     ' /* make visible */
 
-    g_ShowWindow mhWnd, True
+    g_ShowWindow mhWnd, True, True
     SetFocusA mhWndText
 
 End Sub
 
 Private Sub Class_Terminate()
+
+    theItemList.Destroy
+    Set theItemList = Nothing
 
     window_subclass mhWndText, Nothing
     EZ4RemoveWindow mhWndText
@@ -242,7 +249,7 @@ Dim pr As BRect
 
         ' /* tool button */
 
-        If (mMenuOpen) And (mDoingSysMenu) Then
+        If ((mMenuOpen) And (mDoingSysMenu)) Or (GetCapture() = hWnd) Then
             .EnableSmoothing True
             .SetHighColour rgba(0, 0, 0, 20)
             .FillRoundRect mToolRect.InsetByCopy(-4, -4), 7, 7
@@ -391,8 +398,12 @@ Dim sz As String
 Dim i As Long
 
     Set mConfig = New CConfFile3
+
     Set mAlias = New CConfSection
     mAlias.SetName "aliases"
+
+    Set mHistory2 = New CConfSection
+    mHistory2.SetName "history"
 
     With mConfig
         .SetFile Path
@@ -433,6 +444,13 @@ Dim i As Long
             If Not .Find("aliases", mAlias) Then
                 Debug.Print "[aliases] not found"
                 .Add mAlias
+                .Save
+
+            End If
+
+            If Not .Find("history", mHistory2) Then
+                Debug.Print "[history] not found"
+                .Add mHistory2
                 .Save
 
             End If
@@ -645,7 +663,7 @@ Static hDC As Long
     Case WM_ACTIVATE
         Select Case LoWord(wParam)
         Case WA_INACTIVE
-            If (mAutoHide) And (Not theItemList.Visible) Then _
+            If (mAutoHide) And (Not mListOpen) Then _
                 g_ShowWindow hWnd, False
 
         Case WA_CLICKACTIVE
@@ -678,25 +696,29 @@ Static hDC As Long
 
 
     Case WM_LBUTTONDOWN
-        If mToolRect.Contains(new_BPointFromInt32(lParam)) Then
+        If mToolRect.InsetByCopy(-4, -4).Contains(new_BPointFromInt32(lParam)) Then
             SetCapture hWnd
             fButtonPressed = True
+            uRedraw
 
         End If
 
 
     Case WM_LBUTTONUP
         If fButtonPressed Then
-            If mToolRect.Contains(new_BPointFromInt32(lParam)) Then _
+            If mToolRect.InsetByCopy(-4, -4).Contains(new_BPointFromInt32(lParam)) Then _
                 uDoMenu
 
             fButtonPressed = False
+            ReleaseCapture
+'            uRedraw
 
         End If
 
 
     Case WM_CAPTURECHANGED
         fButtonPressed = False
+        uRedraw
 
 
     Case WM_TIMER
@@ -808,7 +830,7 @@ Private Function uWndProcText(ByVal hWnd As Long, ByVal uMsg As Long, ByVal wPar
         Select Case wParam
         Case vbKeyUp
             If mHistoryIndex > 0 Then
-                SetWindowText hWnd, mHistory.TagAt(mHistoryIndex).Name
+                SetWindowText hWnd, mHistory2.EntryAt(mHistoryIndex).Name
                 edit_CursorToEnd hWnd
                 mShowingError = False
 
@@ -867,7 +889,13 @@ Private Function uWndProcText(ByVal hWnd As Long, ByVal uMsg As Long, ByVal wPar
             uParse
 
         Case 27
-            SetWindowText hWnd, ""
+            If mListOpen Then
+                theItemList.Hide
+
+            Else
+                SetWindowText hWnd, ""
+
+            End If
 
         Case Else
             Debug.Print wParam
@@ -890,8 +918,15 @@ Dim hr As Long
     If sz = "" Then _
         Exit Sub
 
-    mHistory.Add new_BTagItem(sz, "")
-    mHistoryIndex = mHistory.CountItems
+    With mHistory2
+        If .IndexOf(sz) = 0 Then
+            .Add sz
+            mConfig.Save
+            mHistoryIndex = .Count
+
+        End If
+
+    End With
 
     ' /* check for an alias */
 
@@ -1080,14 +1115,15 @@ Dim sz As String
             End If
 
         ElseIf Args.Count = 3 Then
+            ' /* add/update if already exists */
             If mAlias.IndexOf(Args.Item(2)) Then
                 ' /* update existing */
-                mAlias.Update Args.Item(2), g_Quote(Args.Item(3))
+                mAlias.Update Args.Item(2), g_RemoveQuotes(Args.Item(3))
                 uResult "Changed alias '" & Args.Item(2) & "'", True
 
             Else
                 ' /* add new */
-                mAlias.Add Args.Item(2), g_Quote(Args.Item(3))
+                mAlias.Add Args.Item(2), g_RemoveQuotes(Args.Item(3))
                 uResult "Added alias '" & Args.Item(2) & "'", True
 
             End If
@@ -1231,49 +1267,68 @@ Private Sub uSetIcon(ByVal Name As String)
     Debug.Print "setting action/icon to '" & Name & "'..."
 
     mAction = Name
-
-    If g_BeginsWith(Name, "!") Then
-        Set mIcon = load_image_obj(g_MakePath(App.Path) & "icons\" & g_SafeRightStr(Name, Len(Name) - 1) & ".png")
-
-    Else
-        Set mIcon = load_image_obj(Name)
-
-    End If
-
+    Set mIcon = uGetIcon(Name)
     uRedraw
 
 End Sub
 
+Private Function uGetIcon(ByVal action As String) As mfxBitmap
+
+    If g_BeginsWith(action, "!") Then
+        Set uGetIcon = load_image_obj(g_MakePath(App.Path) & "icons\" & g_SafeRightStr(action, Len(action) - 1) & ".png")
+
+    Else
+        Set uGetIcon = load_image_obj(action)
+
+    End If
+
+End Function
+
 Private Sub uSetAction()
-Dim szTxt As String
+Dim sz As String
+
+    sz = uGetAction(g_WindowText(mhWndText))
+
+    Debug.Print "action: " & sz
+
+    If sz <> mAction Then _
+        uSetIcon sz
+
+
+'    If (sz <> "!null") And (theItemList.IsVisible) Then _
+        theItemList.Show szTxt
+
+End Sub
+
+Private Function uGetAction(ByVal Command As String) As String
+'Dim command As String
 Dim pc As Collection
 Dim sz As String
 
-    szTxt = g_WindowText(mhWndText)
 
-    mAlias.Find szTxt, szTxt
+    mAlias.Find Command, Command
 
     ' /* pre-defined */
 
-    If szTxt = "" Then
+    If Command = "" Then
         sz = "!null"
 
-    ElseIf g_BeginsWith(szTxt, "?") Then
+    ElseIf g_BeginsWith(Command, "?") Then
         ' /* pb command */
         sz = "!null"
 
-    ElseIf g_BeginsWith(szTxt, "ERR:") Then
+    ElseIf g_BeginsWith(Command, "ERR:") Then
         sz = "!fail"
 
-    ElseIf g_BeginsWith(szTxt, "=") Then
+    ElseIf g_BeginsWith(Command, "=") Then
         sz = "!calc"
 
-    ElseIf g_IsURL(szTxt) Then
+    ElseIf g_IsURL(Command) Then
         sz = "!url"
 
-    ElseIf uIsExtension(szTxt, sz) Then
+    ElseIf uIsExtension(Command, sz) Then
 
-'    ElseIf mAlias.Find(sztxt, "") Then
+'    ElseIf mAlias.Find(command, "") Then
 '        sz = "!alias"
 
     Else
@@ -1281,24 +1336,29 @@ Dim sz As String
 
         sz = "!null"
 
-        Set pc = g_MakeArgList(szTxt)
-        If pc.Count > 0 Then
-            If uExecutableExists(pc.Item(1)) Then
-                sz = "!app"
+        If uExecutableExists(Command) Then
+            sz = "!app"
 
-            ElseIf g_Exists(pc.Item(1)) Then
-                sz = IIf(g_IsFolder(pc.Item(1)), "!folder", "!file")
+        ElseIf g_Exists(Command) Then
+            sz = IIf(g_IsFolder(Command), "!folder", "!file")
 
-            End If
         End If
+
+'        Set pc = g_MakeArgList(command)
+'        If pc.Count > 0 Then
+'            If uExecutableExists(pc.Item(1)) Then
+'                sz = "!app"
+'
+'            ElseIf g_Exists(pc.Item(1)) Then
+'                sz = IIf(g_IsFolder(pc.Item(1)), "!folder", "!file")
+'
+'            End If
+'        End If
     End If
 
-    Debug.Print "action: " & sz
+    uGetAction = sz
 
-    If sz <> mAction Then _
-        uSetIcon sz
-
-End Sub
+End Function
 
 Private Function uIsExtension(ByVal Text As String, ByRef Icon As String) As Boolean
 
@@ -1338,8 +1398,8 @@ Private Sub uLoadExtensions()
 
     Set mExtensions = new_BTagList()
 
-    uAddExtension "test", "Dummy extension", New XTest
-    uAddExtension "snarl", "Snarl", New XSnarl
+'    uAddExtension "test", "Dummy extension", New XTest
+'    uAddExtension "snarl", "Snarl", New XSnarl
 
     uGetScriptExtensions
 
@@ -1480,8 +1540,11 @@ End Sub
 
 Private Sub theItemList_Closed()
 
-    SetFocusA mhWndText
+    mListOpen = False
     uSetAction
+
+    SetFocusA mhWndText
+    SendMessage mhWndText, EM_SETSEL, 16383, ByVal 16383&
 
 End Sub
 
@@ -1493,7 +1556,18 @@ End Sub
 
 Private Sub theItemList_ItemSelected(ByVal Item As String)
 
-    SetWindowText mhWndText, g_Quote(Item)
+    SetWindowText mhWndText, Item
+
+    Debug.Print "* " & mAction
+
+    If theItemList.IsVisible Then
+        Select Case mAction
+        Case "!file"
+            theItemList.Hide
+
+        End Select
+
+    End If
 
 End Sub
 
@@ -1504,35 +1578,34 @@ Private Sub theItemList_OpenSysMenu()
 End Sub
 
 Private Sub uDoItemList()
-
-    If theItemList.Visible Then
-        theItemList.Quit
-        Exit Sub
-
-    End If
-
 Dim sz As String
 
-    sz = g_WindowText(mhWndText)
+    If theItemList.IsVisible Then
+        theItemList.Hide
 
-    Select Case mAction
-    Case "!file"
-        theItemList.Go mhWnd, g_GetPath(sz)
+    Else
+        sz = g_WindowText(mhWndText)
+        mListOpen = True
+    
+        Select Case mAction
+        Case "!file"
+            theItemList.Show g_GetPath(sz)
+    
+        Case "!folder"
+            theItemList.Show sz
+    
+        Case Else
+            uSetIcon "!search"
+            theItemList.Show "", sz
+    
+        End Select
 
-    Case "!folder"
-        theItemList.Go mhWnd, sz
-
-    Case Else
-        uSetIcon "!search"
-        theItemList.Go mhWnd, "", sz
-
-    End Select
+    End If
 
 End Sub
 
 Private Sub uQuit()
 
-    Unload theItemList
     PostQuitMessage 0
 
 End Sub
@@ -1540,5 +1613,42 @@ End Sub
 Public Function BackgroundColour() As Long
 
     BackgroundColour = mColBackground
+
+End Function
+
+Private Sub theItemList_RestoreFocus()
+
+'    uRestoreFocus
+
+End Sub
+
+'Private Sub uRestoreFocus()
+'
+'    SetFocusA mhWndText
+'    SendMessage mhWndText, EM_SETSEL, 16383, ByVal 16383&
+'
+'End Sub
+
+Public Function History() As CConfSection
+
+    Set History = mHistory2
+
+End Function
+
+Public Function Extensions() As BTagList
+
+    Set Extensions = mExtensions
+
+End Function
+
+Public Function Aliases() As CConfSection
+
+    Set Aliases = mAlias
+
+End Function
+
+Public Function IconFor(ByVal Command As String) As mfxBitmap
+
+    Set IconFor = uGetIcon(uGetAction(Command))
 
 End Function

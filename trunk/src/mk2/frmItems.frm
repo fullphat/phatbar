@@ -32,6 +32,7 @@ Begin VB.Form frmItems
       Left            =   60
       TabIndex        =   0
       Top             =   60
+      Visible         =   0   'False
       Width           =   4515
    End
 End
@@ -53,6 +54,8 @@ Dim mPath As String
 
 Dim mView As mfxView
 
+Dim mListbox As CListBox
+
 Implements BWndProcSink
 
 Public Sub Go(ByVal hWndBar As Long, ByVal Path As String, Optional ByVal SearchFor As String)
@@ -70,6 +73,12 @@ Dim cx As Long
     SetWindowLong List1.hWnd, GWL_STYLE, cx And (Not WS_BORDER)
 
     List1.Move 6, 6, Me.ScaleWidth - 12, Me.ScaleHeight - 12
+
+    g_SizeWindow mListbox.hWnd, Me.ScaleWidth - 12, Me.ScaleHeight - 12
+    g_MoveWindow mListbox.hWnd, 6, 6
+
+    mListbox.Add "hello"
+    mListbox.Add "world"
 
     uRedraw
 
@@ -189,6 +198,12 @@ Private Sub Form_Load()
     Set mView = New mfxView
 '    window_subclass Me.hWnd, Me
 
+    Set mListbox = New CListBox
+    If mListbox.Create(Me.hWnd, False) Then
+        g_ShowWindow mListbox.hWnd, True
+
+    End If
+
 End Sub
 
 Private Sub Form_Paint()
@@ -198,6 +213,9 @@ Private Sub Form_Paint()
 End Sub
 
 Private Sub Form_Unload(Cancel As Integer)
+
+    mListbox.Destroy
+    Set mListbox = Nothing
 
 '    window_subclass Me.hWnd, Nothing
 
