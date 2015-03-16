@@ -1,0 +1,1 @@
+phatBar is a launch bar for Windows designed with ease of use and extensibility in mind.  Everything can be launched using the fewest amount of keystrokes possible.
