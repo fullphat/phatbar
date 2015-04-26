@@ -1,0 +1,13 @@
+K:\My Documents\coding\cSharp\PhatBar\bin\Debug\PhatBar.exe
+K:\My Documents\coding\cSharp\PhatBar\bin\Debug\PhatBar.pdb
+K:\My Documents\coding\cSharp\PhatBar\obj\x86\Debug\ResolveAssemblyReference.cache
+K:\My Documents\coding\cSharp\PhatBar\obj\x86\Debug\PhatBar.Form1.resources
+K:\My Documents\coding\cSharp\PhatBar\obj\x86\Debug\PhatBar.Properties.Resources.resources
+K:\My Documents\coding\cSharp\PhatBar\obj\x86\Debug\GenerateResource.read.1.tlog
+K:\My Documents\coding\cSharp\PhatBar\obj\x86\Debug\GenerateResource.write.1.tlog
+K:\My Documents\coding\cSharp\PhatBar\obj\x86\Debug\PhatBar.exe
+K:\My Documents\coding\cSharp\PhatBar\obj\x86\Debug\PhatBar.pdb
+K:\My Documents\coding\cSharp\PhatBar\bin\Debug\PhatBar.exe.config
+\\vmware-host\Shared Folders\Karanga\git\phatbar\bin\Debug\PhatBar.exe.config
+\\vmware-host\Shared Folders\Karanga\git\phatbar\obj\x86\Debug\PhatBar.exe
+\\vmware-host\Shared Folders\Karanga\git\phatbar\obj\x86\Debug\PhatBar.pdb

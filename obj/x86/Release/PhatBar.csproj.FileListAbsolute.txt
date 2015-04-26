@@ -1,0 +1,5 @@
+K:\My Documents\coding\cSharp\PhatBar\obj\x86\Release\ResolveAssemblyReference.cache
+K:\My Documents\coding\cSharp\PhatBar\obj\x86\Release\PhatBar.Form1.resources
+K:\My Documents\coding\cSharp\PhatBar\obj\x86\Release\PhatBar.Properties.Resources.resources
+K:\My Documents\coding\cSharp\PhatBar\obj\x86\Release\GenerateResource.read.1.tlog
+K:\My Documents\coding\cSharp\PhatBar\obj\x86\Release\GenerateResource.write.1.tlog
